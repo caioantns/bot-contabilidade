@@ -3,14 +3,16 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from './config.js';
 import { montarPrompt } from './prompt.js';
 import { definicoes, executores } from './ferramentas.js';
+import { listarEquipe } from './equipe.js';
 
 const MAX_RODADAS = 6;
 let client;
 
-export async function responder({ conversa, cliente, mensagens }) {
+export async function responder({ conversa, cliente, mensagens, enviar }) {
   client ??= new Anthropic({ apiKey: config.anthropicApiKey });
-  const system = montarPrompt({ cliente, conversa });
-  const ctx = { conversa, cliente };
+  const equipe = await listarEquipe().catch(() => []);
+  const system = montarPrompt({ cliente, conversa, equipe });
+  const ctx = { conversa, cliente, enviar };
   const msgs = [...mensagens];
 
   for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {

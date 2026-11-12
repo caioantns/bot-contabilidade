@@ -10,6 +10,7 @@ import { processarMensagem, enfileirar } from './atendimento.js';
 import { definirStatus, registrarMensagem } from './conversas.js';
 import { normalizarTelefone } from './telefone.js';
 import { lerCsv, importarClientes } from './clientes.js';
+import { listarEquipe, atualizarFuncionario } from './equipe.js';
 
 exigir('DATABASE_URL', 'ANTHROPIC_API_KEY', 'ADMIN_TOKEN');
 
@@ -105,14 +106,30 @@ function autenticarAdmin(req, res, next) {
 
 app.get('/admin/transferencias', autenticarAdmin, async (_req, res) => {
   const { rows } = await query(
-    `SELECT t.id, t.setor, t.motivo, t.criado_em, c.telefone, c.nome_perfil, cl.nome AS cliente
+    `SELECT t.id, t.setor, t.motivo, t.criado_em, t.aviso_enviado, f.nome AS funcionaria,
+            c.telefone, c.nome_perfil, cl.nome AS cliente
        FROM transferencias t
        JOIN conversas c ON c.id = t.conversa_id
        LEFT JOIN clientes cl ON cl.id = c.cliente_id
+       LEFT JOIN funcionarios f ON f.id = t.funcionario_id
       WHERE NOT t.resolvida
       ORDER BY t.criado_em`
   );
   res.json(rows);
+});
+
+// ---------- Equipe ----------
+app.get('/admin/equipe', autenticarAdmin, async (_req, res) => {
+  res.json(await listarEquipe({ apenasAtivos: false }));
+});
+
+app.put('/admin/equipe/:id', autenticarAdmin, async (req, res) => {
+  const f = await atualizarFuncionario(Number(req.params.id), {
+    telefone: req.body?.telefone,
+    ativo: req.body?.ativo,
+  });
+  if (!f) return res.sendStatus(404);
+  res.json(f);
 });
 
 app.get('/admin/leads', autenticarAdmin, async (_req, res) => {
@@ -186,7 +203,9 @@ app.post('/admin/teste/mensagem', autenticarAdmin, async (req, res) => {
   if (!texto) return res.status(400).json({ erro: 'texto vazio' });
 
   const respostas = [];
-  const enviar = async (_waId, t) => respostas.push(t);
+  const avisos = [];
+  // No chat de teste nada vai para o WhatsApp: respostas aparecem no painel e avisos à equipe também
+  const enviar = async (destino, t) => (destino === waId ? respostas.push(t) : avisos.push({ para: destino, texto: t }));
   await enfileirar(waId, () =>
     processarMensagem(
       { id: `teste-${Date.now()}-${Math.random().toString(36).slice(2)}`, waId, nomePerfil: 'Teste', tipo: 'text', texto },
@@ -197,7 +216,7 @@ app.post('/admin/teste/mensagem', autenticarAdmin, async (req, res) => {
     `SELECT c.status, cl.nome AS cliente FROM conversas c LEFT JOIN clientes cl ON cl.id = c.cliente_id WHERE c.telefone = $1`,
     [waId]
   );
-  res.json({ respostas, status: rows[0]?.status, cliente: rows[0]?.cliente ?? null });
+  res.json({ respostas, avisos, status: rows[0]?.status, cliente: rows[0]?.cliente ?? null });
 });
 
 app.post('/admin/teste/reset', autenticarAdmin, async (req, res) => {

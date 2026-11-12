@@ -49,7 +49,7 @@ export async function processarMensagem(msg, enviar) {
   const inicio = Date.now();
   let resposta;
   try {
-    resposta = await responder({ conversa, cliente, mensagens });
+    resposta = await responder({ conversa, cliente, mensagens, enviar });
   } catch (err) {
     console.error(`${tag} falha na IA:`, err);
     resposta =

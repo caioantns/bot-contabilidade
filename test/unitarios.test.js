@@ -126,3 +126,29 @@ test('Evolution responde pelo LID quando ele vem no payload', async () => {
   assert.equal(destinoDeEnvio('5522998568084'), '72679503695959@lid');
   assert.equal(destinoDeEnvio('5521000000000'), '5521000000000');
 });
+
+test('escolhe a funcionária certa', async () => {
+  const { escolherFuncionario, acharPorNome } = await import('../src/equipe.js');
+  const equipe = [
+    { id: 1, nome: 'Bianca Carvalho', setor: 'fiscal' },
+    { id: 2, nome: 'Taíse Bastos', setor: 'fiscal' },
+    { id: 3, nome: 'Rosângela Coutinho', setor: 'contabil' },
+    { id: 4, nome: 'Letícia Mondaini', setor: 'dp' },
+    { id: 5, nome: 'Crislaine Viana', setor: 'legalizacao' },
+  ];
+  assert.equal(acharPorNome(equipe, 'taise').nome, 'Taíse Bastos');
+  assert.equal(acharPorNome(equipe, 'Rosangela Coutinho').nome, 'Rosângela Coutinho');
+  assert.equal(acharPorNome(equipe, 'Fulana'), null);
+
+  assert.equal(escolherFuncionario({ equipe, setor: 'dp' }).nome, 'Letícia Mondaini');
+  assert.equal(escolherFuncionario({ equipe, setor: 'legalizacao' }).nome, 'Crislaine Viana');
+  // Fiscal divide: quem tem menos atendimentos abertos
+  assert.equal(escolherFuncionario({ equipe, setor: 'fiscal', abertosPorId: { 1: 2, 2: 0 } }).nome, 'Taíse Bastos');
+  assert.equal(escolherFuncionario({ equipe, setor: 'fiscal', abertosPorId: {} }).nome, 'Bianca Carvalho');
+  // Responsável do cliente tem prioridade dentro do setor
+  assert.equal(escolherFuncionario({ equipe, setor: 'fiscal', responsavelCliente: 'Taíse', abertosPorId: { 2: 9 } }).nome, 'Taíse Bastos');
+  // Pedido pelo nome vence tudo
+  assert.equal(escolherFuncionario({ equipe, setor: 'fiscal', nomePedido: 'Letícia' }).nome, 'Letícia Mondaini');
+  // Setor sem ninguém
+  assert.equal(escolherFuncionario({ equipe, setor: 'comercial' }), null);
+});

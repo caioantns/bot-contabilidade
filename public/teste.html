@@ -42,6 +42,13 @@
   #qr img { width: 100%; max-width: 280px; display: block; margin: 12px auto; background: #fff; padding: 8px; border-radius: 8px; }
   .dica { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
   .stack > * + * { margin-top: 16px; }
+  .func { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .func:first-child { border-top: 0; }
+  .func .nome { font-weight: 600; }
+  .func .setor { color: var(--muted); font-size: 13px; }
+  .func input { grid-column: 1; }
+  .func button { grid-column: 2; padding: 8px 12px; }
+  .msg.aviso { align-self: center; max-width: 92%; font-size: 13px; background: none; border: 1px dashed var(--line); color: var(--muted); }
 </style>
 </head>
 <body>
@@ -88,6 +95,12 @@
       <p class="dica">No celular do número de teste: WhatsApp → Aparelhos conectados → Conectar um aparelho → escaneie o QR.
         Deixe a câmera do celular já aberta antes de clicar: o QR vale por uns 40 segundos. Se expirar, clique de novo
         (cada clique começa uma conexão nova do zero).</p>
+    </section>
+
+    <section>
+      <h2>Equipe (quem recebe os encaminhamentos)</h2>
+      <div id="equipe"><p class="dica">Preencha o token para carregar.</p></div>
+      <p class="dica">O WhatsApp de cada uma recebe um aviso com o resumo do pedido e o número do cliente. Sem telefone, o encaminhamento fica só registrado.</p>
     </section>
 
     <section>
@@ -142,6 +155,7 @@ $('formMsg').addEventListener('submit', async (e) => {
   try {
     const r = await api('/admin/teste/mensagem', { corpo: { telefone: $('telefone').value, texto } });
     r.respostas.forEach((t) => bolha(t, 'bot'));
+    (r.avisos || []).forEach((a) => bolha('📨 Aviso que iria para o WhatsApp +' + a.para + ':\n\n' + a.texto, 'aviso'));
     if (!r.respostas.length && r.status === 'humano') bolha('Conversa com a equipe (modo humano): o bot não responde. Clique em "Nova conversa" para recomeçar.', 'info');
     else if (r.status === 'humano') bolha('↪ Transferido para a equipe', 'info');
   } catch (err) { bolha(err.message, 'erro'); }
@@ -209,7 +223,41 @@ $('btnImportar').addEventListener('click', async () => {
   } catch (err) { $('resImport').textContent = err.message; }
 });
 
-if ($('token').value) atualizarStatus();
+const nomesSetor = { fiscal: 'Fiscal', contabil: 'Contábil', dp: 'Departamento Pessoal', legalizacao: 'Legalização', comercial: 'Comercial', financeiro: 'Financeiro', geral: 'Atendimento' };
+
+async function carregarEquipe() {
+  try {
+    const lista = await api('/admin/equipe', { metodo: 'GET' });
+    const box = $('equipe');
+    box.innerHTML = '';
+    lista.forEach((f) => {
+      const linha = document.createElement('div');
+      linha.className = 'func';
+      linha.innerHTML =
+        '<div><div class="nome"></div><div class="setor"></div></div><span></span>' +
+        '<input inputmode="tel" placeholder="WhatsApp, ex.: 21999998888"><button type="button" class="sec">Salvar</button>';
+      linha.querySelector('.nome').textContent = f.nome;
+      linha.querySelector('.setor').textContent = nomesSetor[f.setor] || f.setor;
+      const input = linha.querySelector('input');
+      input.value = f.telefone || '';
+      const btn = linha.querySelector('button');
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const r = await api('/admin/equipe/' + f.id, { metodo: 'PUT', corpo: { telefone: input.value } });
+          input.value = r.telefone || '';
+          btn.textContent = 'Salvo ✓';
+          setTimeout(() => (btn.textContent = 'Salvar'), 1500);
+        } catch (err) { btn.textContent = 'Erro'; }
+        btn.disabled = false;
+      });
+      box.appendChild(linha);
+    });
+  } catch (err) { $('equipe').innerHTML = '<p class="dica"></p>'; $('equipe').firstChild.textContent = err.message; }
+}
+$('token').addEventListener('change', carregarEquipe);
+
+if ($('token').value) { atualizarStatus(); carregarEquipe(); }
 </script>
 </body>
 </html>

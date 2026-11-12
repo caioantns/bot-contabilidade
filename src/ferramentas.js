@@ -2,6 +2,7 @@
 import { query } from './db.js';
 import { buscarConhecimento } from './rag/busca.js';
 import { definirStatus } from './conversas.js';
+import { SETORES, listarEquipe, escolherFuncionario, atendimentosAbertos, textoAviso } from './equipe.js';
 
 export const definicoes = [
   {
@@ -40,15 +41,20 @@ export const definicoes = [
   {
     name: 'transferir_para_humano',
     description:
-      'Passa a conversa para a equipe. Depois de chamar, o bot para de responder esta conversa até a equipe devolver. ' +
-      'Use para pedidos de documentos, casos específicos, reclamações, pedido explícito de falar com pessoa, ou quando não souber responder.',
+      'Passa a conversa para a pessoa certa da equipe e avisa essa pessoa. Depois de chamar, o bot para de responder esta conversa. ' +
+      'Use para pedidos de documentos, casos específicos, reclamações, pedido explícito de falar com alguém, ou quando não souber responder. ' +
+      'O resultado diz o nome de quem vai atender: informe esse nome ao cliente.',
     input_schema: {
       type: 'object',
       properties: {
-        setor: { type: 'string', enum: ['comercial', 'fiscal', 'dp', 'financeiro', 'geral'] },
+        setor: { type: 'string', enum: Object.keys(SETORES) },
         motivo: {
           type: 'string',
-          description: 'Resumo objetivo para a equipe: o que a pessoa precisa, com detalhes (documento, competência, etc.).',
+          description: 'Resumo objetivo para a funcionária: o que a pessoa precisa, com detalhes (documento, competência, etc.).',
+        },
+        funcionario: {
+          type: 'string',
+          description: 'Só se o cliente pediu para falar com alguém pelo nome (ex.: "Bianca"). Senão, deixe vazio.',
         },
       },
       required: ['setor', 'motivo'],
@@ -87,14 +93,46 @@ export const executores = {
     return 'Lead registrado. A equipe comercial vai entrar em contato.';
   },
 
-  async transferir_para_humano({ setor, motivo }, { conversa }) {
-    await query('INSERT INTO transferencias (conversa_id, setor, motivo) VALUES ($1, $2, $3)', [
-      conversa.id,
+  async transferir_para_humano({ setor, motivo, funcionario: nomePedido }, { conversa, cliente, enviar }) {
+    const equipe = await listarEquipe();
+    const escolhida = escolherFuncionario({
+      equipe,
       setor,
-      motivo,
-    ]);
+      nomePedido,
+      responsavelCliente: cliente?.responsavel,
+      abertosPorId: await atendimentosAbertos(),
+    });
+    const setorFinal = escolhida?.setor ?? setor;
+
+    const { rows } = await query(
+      'INSERT INTO transferencias (conversa_id, setor, motivo, funcionario_id) VALUES ($1, $2, $3, $4) RETURNING id',
+      [conversa.id, setorFinal, motivo, escolhida?.id ?? null]
+    );
     await definirStatus(conversa.id, 'humano');
-    console.log(`[transferência] conversa ${conversa.id} → ${setor}: ${motivo}`);
-    return 'Transferido. Avise a pessoa que a equipe vai continuar o atendimento por aqui (e quando, se for fora do horário). Não faça mais perguntas.';
+
+    // Avisa a funcionária no WhatsApp dela (se o telefone estiver cadastrado)
+    let avisada = false;
+    if (escolhida?.telefone && enviar) {
+      try {
+        await enviar(escolhida.telefone, textoAviso({ funcionario: escolhida, setor: setorFinal, motivo, conversa, cliente }));
+        await query('UPDATE transferencias SET aviso_enviado = TRUE WHERE id = $1', [rows[0].id]);
+        avisada = true;
+      } catch (err) {
+        console.error(`[transferência] falha ao avisar ${escolhida.nome}:`, err.message);
+      }
+    }
+    console.log(
+      `[transferência] conversa ${conversa.id} → ${SETORES[setorFinal] ?? setorFinal}` +
+        `${escolhida ? ` / ${escolhida.nome}${avisada ? ' (avisada)' : ' (sem aviso: telefone não cadastrado)'}` : ''}`
+    );
+
+    const area = SETORES[setorFinal] ?? setorFinal;
+    if (escolhida) {
+      return (
+        `Transferido para ${escolhida.nome} (${area}). Diga ao cliente que ${escolhida.nome.split(' ')[0]}, do ${area}, ` +
+        'vai continuar o atendimento e entrar em contato (se for fora do horário, no próximo horário de atendimento). Não faça mais perguntas.'
+      );
+    }
+    return `Transferido para a equipe (${area}). Avise que a equipe vai continuar o atendimento (e quando, se for fora do horário). Não faça mais perguntas.`;
   },
 };
