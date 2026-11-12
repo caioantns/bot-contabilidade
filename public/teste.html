@@ -157,7 +157,10 @@ $('btnReset').addEventListener('click', async () => {
   } catch (err) { bolha(err.message, 'erro'); }
 });
 
-const nomesEstado = { open: 'conectado', connecting: 'aguardando QR', close: 'desconectado', inexistente: 'não criado' };
+const nomesEstado = {
+  open: 'conectado', connecting: 'aguardando QR', close: 'desconectado', inexistente: 'não criado',
+  meta: 'API oficial da Meta (sem QR code)', 'meta-pendente': 'API da Meta: faltam variáveis no Railway',
+};
 function mostrarEstado(e) {
   $('estado').textContent = nomesEstado[e] || e || '—';
   $('estado').className = 'estado ' + (e || '');
@@ -168,6 +171,7 @@ let poll;
 async function atualizarStatus() {
   try {
     const r = await api('/admin/whatsapp/status', { metodo: 'GET' });
+    if (r.canal === 'meta') { mostrarEstado(r.estado); $('estado').className = 'estado' + (r.configurado ? ' open' : ''); return; }
     if (!r.configurado) { $('estado').textContent = 'não configurado no servidor'; return; }
     mostrarEstado(r.estado);
     if (r.estado === 'open') clearInterval(poll);

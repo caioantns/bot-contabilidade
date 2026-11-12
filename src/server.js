@@ -132,6 +132,7 @@ app.post('/admin/conversas/:telefone/devolver', autenticarAdmin, async (req, res
 
 // ---------- Conexão do WhatsApp por QR code (Evolution) ----------
 app.get('/admin/whatsapp/status', autenticarAdmin, async (_req, res) => {
+  if (!usaEvolution) return res.json({ canal: 'meta', configurado: metaAtivo, estado: metaAtivo ? 'meta' : 'meta-pendente' });
   if (!evolutionAtivo) return res.json({ canal: config.canal, configurado: false });
   res.json({ canal: config.canal, configurado: true, estado: await evolution.estadoConexao() });
 });

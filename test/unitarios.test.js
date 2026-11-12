@@ -108,3 +108,10 @@ test('extrai mensagens da Evolution API', () => {
   assert.equal(audio.tipo, 'audio');
   assert.equal(audio.texto, '');
 });
+
+test('responde números brasileiros da Meta com o 9', async () => {
+  const { destinatario } = await import('../src/whatsapp.js');
+  assert.equal(destinatario('552199998888'), '5521999998888');
+  assert.equal(destinatario('5521999998888'), '5521999998888');
+  assert.equal(destinatario('14155550123'), '14155550123');
+});

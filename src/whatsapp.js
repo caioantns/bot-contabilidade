@@ -1,6 +1,7 @@
 // Integração com a WhatsApp Cloud API (Meta): validar webhook, extrair mensagens, enviar respostas.
 import crypto from 'node:crypto';
 import { config } from './config.js';
+import { normalizarTelefone } from './telefone.js';
 
 const wa = config.whatsapp;
 const graphUrl = () => `https://graph.facebook.com/${wa.graphVersion}/${wa.phoneNumberId}/messages`;
@@ -78,10 +79,14 @@ async function chamarGraph(payload) {
   return res.json();
 }
 
+// A Meta entrega números brasileiros às vezes SEM o 9 (ex.: 552199998888). Respondendo assim, o envio
+// falha no modo de teste ("recipient not in allowed list"). Com o 9 funciona sempre.
+export const destinatario = (waId) => (String(waId).startsWith('55') ? normalizarTelefone(waId) : String(waId));
+
 // WhatsApp limita texto a 4096 caracteres; quebramos em partes se precisar
 export async function enviarTexto(waId, texto) {
   for (const parte of dividirTexto(texto, 4000)) {
-    await chamarGraph({ to: waId, type: 'text', text: { body: parte, preview_url: false } });
+    await chamarGraph({ to: destinatario(waId), type: 'text', text: { body: parte, preview_url: false } });
   }
 }
 
@@ -96,7 +101,7 @@ export async function marcarComoLida(messageId) {
 // Envio de documento por link (usado na etapa de documentos)
 export async function enviarDocumento(waId, { link, nomeArquivo, legenda }) {
   return chamarGraph({
-    to: waId,
+    to: destinatario(waId),
     type: 'document',
     document: { link, filename: nomeArquivo, caption: legenda },
   });
