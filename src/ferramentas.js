@@ -41,7 +41,7 @@ export const definicoes = [
   {
     name: 'transferir_para_humano',
     description:
-      'Passa a conversa para a pessoa certa da equipe e avisa essa pessoa. Depois de chamar, o bot para de responder esta conversa. ' +
+      'Passa a conversa para a pessoa certa da equipe e avisa essa pessoa. ' +
       'Use para pedidos de documentos, casos específicos, reclamações, pedido explícito de falar com alguém, ou quando não souber responder. ' +
       'O resultado diz o nome de quem vai atender: informe esse nome ao cliente.',
     input_schema: {
@@ -133,9 +133,9 @@ export const executores = {
     if (escolhida) {
       return (
         `Transferido para ${escolhida.nome} (${area}). Diga ao cliente que ${escolhida.nome.split(' ')[0]}, do ${area}, ` +
-        'vai continuar o atendimento e entrar em contato (se for fora do horário, no próximo horário de atendimento). Não faça mais perguntas.'
+        'vai continuar o atendimento e entrar em contato (se for fora do horário, no próximo horário de atendimento). Não faça mais perguntas nesta resposta.'
       );
     }
-    return `Transferido para a equipe (${area}). Avise que a equipe vai continuar o atendimento (e quando, se for fora do horário). Não faça mais perguntas.`;
+    return `Transferido para a equipe (${area}). Avise que a equipe vai continuar o atendimento (e quando, se for fora do horário). Não faça mais perguntas nesta resposta.`;
   },
 };

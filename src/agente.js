@@ -15,22 +15,38 @@ export async function responder({ conversa, cliente, mensagens, enviar }) {
   const ctx = { conversa, cliente, enviar };
   const msgs = [...mensagens];
 
+  let tentativasVazias = 0;
   for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {
     const resp = await client.messages.create({
       model: config.anthropicModel,
-      max_tokens: 1024,
+      max_tokens: 4096,
       system,
       tools: definicoes,
       messages: msgs,
     });
 
     if (resp.stop_reason !== 'tool_use') {
-      const texto = resp.content
-        .filter((b) => b.type === 'text')
-        .map((b) => b.text)
-        .join('\n')
-        .trim();
-      return texto || 'Desculpe, não consegui entender. Pode reformular?';
+      const texto = textoDe(resp);
+      if (texto) return texto;
+
+      // Resposta sem texto: registra o motivo e tenta mais uma vez pedindo explicitamente uma resposta
+      console.warn(
+        `[agente] resposta vazia (stop_reason=${resp.stop_reason}, blocos=${resp.content.map((b) => b.type).join(',') || 'nenhum'}, ` +
+          `saída=${resp.usage?.output_tokens} tokens)`
+      );
+      if (tentativasVazias++ >= 1) break;
+      const lembrete =
+        '[Mensagem do sistema, não do cliente] Sua última resposta veio vazia. Responda agora ao cliente, em texto, ' +
+        'à última mensagem dele. Se for um pedido para a equipe, use transferir_para_humano.';
+      // Blocos de texto vazios não podem voltar para a API
+      const conteudoUtil = resp.content.filter((b) => !(b.type === 'text' && !b.text.trim()));
+      if (conteudoUtil.length) {
+        msgs.push({ role: 'assistant', content: conteudoUtil });
+        msgs.push({ role: 'user', content: lembrete });
+      } else {
+        acrescentarAoUltimoUsuario(msgs, lembrete);
+      }
+      continue;
     }
 
     // Executa todas as ferramentas pedidas nesta rodada
@@ -53,5 +69,20 @@ export async function responder({ conversa, cliente, mensagens, enviar }) {
     msgs.push({ role: 'user', content: resultados });
   }
 
-  return 'Vou pedir para alguém da equipe continuar seu atendimento, tudo bem? Já já te respondem por aqui.';
+  return 'Desculpe, tive um problema para responder agora. Pode me mandar sua mensagem de novo, por favor?';
+}
+
+function acrescentarAoUltimoUsuario(msgs, texto) {
+  const ultima = msgs[msgs.length - 1];
+  if (ultima?.role !== 'user') return msgs.push({ role: 'user', content: texto });
+  if (typeof ultima.content === 'string') ultima.content += `\n\n${texto}`;
+  else ultima.content = [...ultima.content, { type: 'text', text: texto }];
+}
+
+function textoDe(resp) {
+  return resp.content
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('\n')
+    .trim();
 }
