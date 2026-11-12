@@ -13,7 +13,7 @@ export const config = {
   voyageApiKey: env.VOYAGE_API_KEY || '',
   voyageModel: env.VOYAGE_MODEL || 'voyage-3.5',
 
-  // Canal do WhatsApp: 'evolution' (QR code, Evolution API) ou 'meta' (WhatsApp Cloud API oficial)
+  // Canal do WhatsApp: 'twilio', 'meta' (WhatsApp Cloud API oficial) ou 'evolution' (QR code)
   canal: (env.CANAL || 'evolution').toLowerCase(),
 
   // URL pública do bot (o Railway preenche RAILWAY_PUBLIC_DOMAIN sozinho)
@@ -25,6 +25,14 @@ export const config = {
     instance: env.EVOLUTION_INSTANCE || 'contabilidade',
     // Segredo na URL do webhook (a Evolution não assina as requisições)
     webhookToken: env.EVOLUTION_WEBHOOK_TOKEN || '',
+  },
+
+  twilio: {
+    accountSid: env.TWILIO_ACCOUNT_SID || '',
+    authToken: env.TWILIO_AUTH_TOKEN || '',
+    // Número do Sandbox da Twilio (troque se usar um número próprio aprovado)
+    from: env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886',
+    apiBase: env.TWILIO_API_BASE || 'https://api.twilio.com',
   },
 
   whatsapp: {

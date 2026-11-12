@@ -5,6 +5,7 @@ import { config, exigir } from './config.js';
 import { pool, query } from './db.js';
 import * as meta from './whatsapp.js';
 import * as evolution from './evolution.js';
+import * as twilio from './twilio.js';
 import { processarMensagem, enfileirar } from './atendimento.js';
 import { definirStatus, registrarMensagem } from './conversas.js';
 import { normalizarTelefone } from './telefone.js';
@@ -14,16 +15,20 @@ exigir('DATABASE_URL', 'ANTHROPIC_API_KEY', 'ADMIN_TOKEN');
 
 // ---------- Qual canal de WhatsApp está ativo ----------
 const usaEvolution = config.canal === 'evolution';
-const metaAtivo =
-  !usaEvolution && Boolean(config.whatsapp.token && config.whatsapp.phoneNumberId && config.whatsapp.verifyToken);
+const usaTwilio = config.canal === 'twilio';
+const usaMeta = !usaEvolution && !usaTwilio;
+const metaAtivo = usaMeta && Boolean(config.whatsapp.token && config.whatsapp.phoneNumberId && config.whatsapp.verifyToken);
 const evolutionAtivo = usaEvolution && Boolean(config.evolution.url && config.evolution.apiKey && config.evolution.webhookToken);
-const enviarTexto = usaEvolution ? evolution.enviarTexto : meta.enviarTexto;
+const twilioAtivo = usaTwilio && Boolean(config.twilio.accountSid && config.twilio.authToken);
+const enviarTexto = usaEvolution ? evolution.enviarTexto : usaTwilio ? twilio.enviarTexto : meta.enviarTexto;
 
 if (usaEvolution && !evolutionAtivo) {
   console.warn('[server] Evolution API não configurada (EVOLUTION_URL, EVOLUTION_API_KEY, EVOLUTION_WEBHOOK_TOKEN). Use a página /teste.');
-} else if (!usaEvolution && !metaAtivo) {
+} else if (usaTwilio && !twilioAtivo) {
+  console.warn('[server] Twilio não configurada (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN). Use a página /teste.');
+} else if (usaMeta && !metaAtivo) {
   console.warn('[server] WhatsApp Cloud API não configurada. Use a página /teste.');
-} else if (!usaEvolution && !config.whatsapp.appSecret) {
+} else if (usaMeta && !config.whatsapp.appSecret) {
   console.warn('[server] WHATSAPP_APP_SECRET vazio: assinatura do webhook NÃO está sendo validada.');
 }
 console.log(`[server] canal: ${config.canal}`);
@@ -61,6 +66,22 @@ app.post('/webhook', (req, res) => {
     meta.marcarComoLida(msg.id);
     enfileirar(normalizarTelefone(msg.waId), () => processarMensagem(msg, enviarTexto));
   }
+});
+
+// ---------- Webhook da Twilio ----------
+app.post('/webhook/twilio', express.urlencoded({ extended: false }), (req, res) => {
+  if (!twilioAtivo) return res.sendStatus(503);
+  // A assinatura é calculada sobre a URL pública exata configurada no painel da Twilio
+  const base = config.publicUrl || `${req.protocol}://${req.get('host')}`;
+  if (!twilio.assinaturaTwilioValida(`${base}${req.originalUrl}`, req.body, req.get('x-twilio-signature'))) {
+    console.warn('[twilio] assinatura inválida');
+    return res.sendStatus(403);
+  }
+  // Responde vazio na hora; a resposta do bot vai pela API (pode levar alguns segundos)
+  res.type('text/xml').send('<Response></Response>');
+
+  const msg = twilio.extrairMensagemTwilio(req.body);
+  if (msg) enfileirar(normalizarTelefone(msg.waId), () => processarMensagem(msg, enviarTexto));
 });
 
 // ---------- Webhook da Evolution API (QR code) ----------
@@ -132,7 +153,8 @@ app.post('/admin/conversas/:telefone/devolver', autenticarAdmin, async (req, res
 
 // ---------- Conexão do WhatsApp por QR code (Evolution) ----------
 app.get('/admin/whatsapp/status', autenticarAdmin, async (_req, res) => {
-  if (!usaEvolution) return res.json({ canal: 'meta', configurado: metaAtivo, estado: metaAtivo ? 'meta' : 'meta-pendente' });
+  if (usaTwilio) return res.json({ canal: 'twilio', configurado: twilioAtivo, estado: twilioAtivo ? 'twilio' : 'twilio-pendente' });
+  if (usaMeta) return res.json({ canal: 'meta', configurado: metaAtivo, estado: metaAtivo ? 'meta' : 'meta-pendente' });
   if (!evolutionAtivo) return res.json({ canal: config.canal, configurado: false });
   res.json({ canal: config.canal, configurado: true, estado: await evolution.estadoConexao() });
 });
