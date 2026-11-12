@@ -1,18 +1,55 @@
 // Prompt de sistema: personalidade, regras e contexto de quem está falando.
 import { config } from './config.js';
 
-export function dentroDoHorario(agora = new Date()) {
+// "8" → 480, "8:30" → 510, "23:59" → 1439. Inválido → null.
+export function paraMinutos(valor) {
+  const m = String(valor ?? '').trim().match(/^(\d{1,2})(?:[:h](\d{2}))?h?$/i);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2] ?? 0);
+  if (h > 24 || min > 59 || (h === 24 && min > 0)) return null;
+  return h * 60 + min;
+}
+
+// Fim com minutos ("23:59") inclui aquele minuto; fim em hora cheia ("18") vai até 17:59.
+function janela(inicio, fim) {
+  const ini = paraMinutos(inicio) ?? 8 * 60;
+  let f = paraMinutos(fim) ?? 18 * 60;
+  if (/[:h]\d{2}/i.test(String(fim))) f += 1;
+  return [ini, Math.min(f, 1440)];
+}
+
+export function formatarHora(valor) {
+  const t = paraMinutos(valor);
+  if (t === null) return String(valor);
+  const h = Math.floor(t / 60);
+  const m = t % 60;
+  return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+}
+
+export function dentroDoHorario(agora = new Date(), empresa = config.empresa) {
   const partes = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Sao_Paulo',
     weekday: 'short',
     hour: 'numeric',
+    minute: 'numeric',
     hour12: false,
   }).formatToParts(agora);
   const dias = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   const dia = dias[partes.find((p) => p.type === 'weekday').value];
-  const hora = Number(partes.find((p) => p.type === 'hour').value) % 24;
-  const { horarioInicio, horarioFim, diasUteis } = config.empresa;
-  return diasUteis.includes(dia) && hora >= horarioInicio && hora < horarioFim;
+  const minutos = (Number(partes.find((p) => p.type === 'hour').value) % 24) * 60 + Number(partes.find((p) => p.type === 'minute').value);
+  const [ini, fim] = janela(empresa.horarioInicio, empresa.horarioFim);
+  return empresa.diasUteis.includes(dia) && minutos >= ini && minutos < fim;
+}
+
+function textoHorario(empresa = config.empresa) {
+  const [ini, fim] = janela(empresa.horarioInicio, empresa.horarioFim);
+  const nomes = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  const d = [...empresa.diasUteis].sort();
+  const dias =
+    d.length === 7 ? 'todos os dias' : d.join(',') === '1,2,3,4,5' ? 'dias úteis (segunda a sexta)' : d.map((x) => nomes[x]).join(', ');
+  const horas = ini === 0 && fim >= 1439 ? '24 horas' : `das ${formatarHora(empresa.horarioInicio)} às ${formatarHora(empresa.horarioFim)}`;
+  return `${dias}, ${horas}`;
 }
 
 const SETOR_DESCRICAO = {
@@ -39,7 +76,7 @@ Se o cliente pedir para falar com alguém pelo nome, passe esse nome no campo "f
 }
 
 export function montarPrompt({ cliente, conversa, equipe = [], agora = new Date() }) {
-  const { nome, horarioInicio, horarioFim } = config.empresa;
+  const { nome } = config.empresa;
   const dataHora = agora.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'full', timeStyle: 'short' });
   const aberto = dentroDoHorario(agora);
 
@@ -59,7 +96,7 @@ Se a pessoa disser que já é cliente: não peça nem confirme dados da empresa 
 
 # Contexto
 - Agora: ${dataHora} (horário de Brasília).
-- Atendimento humano: dias úteis, das ${horarioInicio}h às ${horarioFim}h. Neste momento a equipe está ${aberto ? 'DISPONÍVEL' : 'FORA DO HORÁRIO'}.
+- Atendimento humano: ${textoHorario()}. Neste momento a equipe está ${aberto ? 'DISPONÍVEL' : 'FORA DO HORÁRIO'}.
 
 ${quem}
 

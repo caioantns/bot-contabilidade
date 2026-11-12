@@ -152,3 +152,20 @@ test('escolhe a funcionária certa', async () => {
   // Setor sem ninguém
   assert.equal(escolherFuncionario({ equipe, setor: 'comercial' }), null);
 });
+
+test('horário aceita minutos e dia inteiro', async () => {
+  const { dentroDoHorario, paraMinutos, formatarHora } = await import('../src/prompt.js');
+  assert.equal(paraMinutos('00'), 0);
+  assert.equal(paraMinutos('23:59'), 1439);
+  assert.equal(paraMinutos('8h30'), 510);
+  assert.equal(paraMinutos('abc'), null);
+  assert.equal(formatarHora('23:59'), '23h59');
+  const todoDia = { horarioInicio: '00', horarioFim: '23:59', diasUteis: [0, 1, 2, 3, 4, 5, 6] };
+  // 23:58 de domingo em Brasília (02:58Z de segunda)
+  assert.equal(dentroDoHorario(new Date('2026-11-16T02:58:00Z'), todoDia), true);
+  assert.equal(dentroDoHorario(new Date('2026-11-16T02:59:30Z'), todoDia), true);  // 23:59
+  assert.equal(dentroDoHorario(new Date('2026-11-15T03:00:00Z'), todoDia), true);  // 00:00
+  const comercial = { horarioInicio: '8', horarioFim: '18', diasUteis: [1, 2, 3, 4, 5] };
+  assert.equal(dentroDoHorario(new Date('2026-11-10T20:59:00Z'), comercial), true);  // terça 17:59
+  assert.equal(dentroDoHorario(new Date('2026-11-10T21:00:00Z'), comercial), false); // terça 18:00
+});

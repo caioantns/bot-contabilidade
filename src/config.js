@@ -45,8 +45,9 @@ export const config = {
 
   empresa: {
     nome: env.EMPRESA_NOME || 'Contabilidade',
-    horarioInicio: Number(env.HORARIO_INICIO ?? 8),
-    horarioFim: Number(env.HORARIO_FIM ?? 18),
+    // Aceita "8", "08", "8:30", "00:00", "23:59" ou "24"
+    horarioInicio: (env.HORARIO_INICIO ?? '8').trim(),
+    horarioFim: (env.HORARIO_FIM ?? '18').trim(),
     diasUteis: (env.DIAS_UTEIS || '1,2,3,4,5').split(',').map(Number),
   },
 
