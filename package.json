@@ -1,0 +1,24 @@
+{
+  "name": "bot-contabilidade",
+  "version": "0.1.0",
+  "description": "Bot de atendimento com IA para contabilidade via WhatsApp Cloud API",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node scripts/migrate.js && node scripts/ingest.js && node src/server.js",
+    "dev": "node --watch --env-file=.env src/server.js",
+    "migrate": "node --env-file-if-exists=.env scripts/migrate.js",
+    "ingest": "node --env-file-if-exists=.env scripts/ingest.js",
+    "importar-clientes": "node --env-file-if-exists=.env scripts/importar-clientes.js",
+    "chat": "node --env-file-if-exists=.env scripts/chat.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "express": "^5.3.0",
+    "pg": "^8.23.1"
+  }
+}

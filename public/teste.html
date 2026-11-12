@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel do bot</title>
+<style>
+  :root {
+    --bg: #f4f2ee; --card: #fff; --ink: #1d1f22; --muted: #6b6f76; --line: #e3e0da;
+    --brand: #1f6f5c; --brand-ink: #fff; --bot: #eef5f2; --user: #1f6f5c; --warn: #b4531a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #15171a; --card: #1e2125; --ink: #eceae6; --muted: #9a9ea5; --line: #2e3237;
+            --brand: #3fa98c; --brand-ink: #0d1412; --bot: #232a28; --user: #2f8a72; --warn: #e08a52; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  header { padding: 20px 16px 8px; max-width: 1100px; margin: 0 auto; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  h1 { font-size: 20px; margin: 0; }
+  header small { color: var(--muted); }
+  main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 32px; display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { main { grid-template-columns: 1.4fr 1fr; } }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
+  input, textarea { width: 100%; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  textarea { min-height: 90px; font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+  button { font: inherit; border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer; background: var(--brand); color: var(--brand-ink); font-weight: 600; }
+  button.sec { background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 500; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .row { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 160px; }
+  #chat { height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 8px 2px; margin: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .msg { max-width: 82%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.voce { align-self: flex-end; background: var(--user); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: var(--bot); border-bottom-left-radius: 4px; }
+  .msg.info { align-self: center; color: var(--muted); font-size: 13px; background: none; }
+  .msg.erro { align-self: center; color: var(--warn); font-size: 13px; }
+  form.enviar { display: flex; gap: 8px; }
+  .estado { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 13px; border: 1px solid var(--line); }
+  .estado.open { color: var(--brand); border-color: var(--brand); }
+  #qr img { width: 100%; max-width: 280px; display: block; margin: 12px auto; background: #fff; padding: 8px; border-radius: 8px; }
+  .dica { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+  .stack > * + * { margin-top: 16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Painel do bot de atendimento</h1>
+  <small>uso interno — protegido pelo token de admin</small>
+</header>
+
+<main>
+  <section>
+    <h2>Simular conversa</h2>
+    <div class="row">
+      <div>
+        <label for="telefone">Telefone simulado</label>
+        <input id="telefone" value="21900000000" inputmode="tel">
+      </div>
+      <button class="sec" id="btnReset" type="button">Nova conversa</button>
+    </div>
+    <p class="dica">Use um telefone que não esteja na base para testar como lead, ou o de um cliente cadastrado (ex.: 21999990001).</p>
+    <div id="chat" aria-live="polite"></div>
+    <form class="enviar" id="formMsg">
+      <input id="texto" placeholder="Escreva como se fosse o cliente…" autocomplete="off">
+      <button id="btnEnviar">Enviar</button>
+    </form>
+  </section>
+
+  <div class="stack">
+    <section>
+      <h2>Acesso</h2>
+      <label for="token">Token de admin</label>
+      <input id="token" type="password" placeholder="ADMIN_TOKEN">
+      <p class="dica">Fica salvo só neste navegador.</p>
+    </section>
+
+    <section>
+      <h2>WhatsApp</h2>
+      <p>Estado: <span class="estado" id="estado">—</span></p>
+      <div class="row">
+        <button id="btnConectar" type="button">Conectar / mostrar QR</button>
+        <button class="sec" id="btnStatus" type="button">Atualizar</button>
+        <button class="sec" id="btnDesconectar" type="button">Desconectar</button>
+      </div>
+      <div id="qr"></div>
+      <p class="dica">No celular do número de teste: WhatsApp → Aparelhos conectados → Conectar um aparelho → escaneie o QR.</p>
+    </section>
+
+    <section>
+      <h2>Importar clientes (CSV)</h2>
+      <textarea id="csv" placeholder="nome;cnpj;regime;responsavel;email;telefone;contato"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="btnImportar" type="button">Importar</button>
+        <button class="sec" id="btnExemplo" type="button">Usar exemplo</button>
+      </div>
+      <p class="dica" id="resImport"></p>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const ler = (k) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
+
+$('token').value = ler('botToken');
+$('token').addEventListener('change', () => guardar('botToken', $('token').value.trim()));
+
+async function api(caminho, { metodo = 'POST', corpo, tipo = 'application/json' } = {}) {
+  const token = $('token').value.trim();
+  if (!token) throw new Error('Preencha o token de admin.');
+  const res = await fetch(caminho, {
+    method: metodo,
+    headers: { Authorization: 'Bearer ' + token, ...(corpo !== undefined ? { 'Content-Type': tipo } : {}) },
+    body: corpo === undefined ? undefined : (tipo === 'application/json' ? JSON.stringify(corpo) : corpo),
+  });
+  if (res.status === 401) throw new Error('Token inválido.');
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.erro || 'Erro ' + res.status);
+  return json;
+}
+
+function bolha(texto, classe) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + classe;
+  div.textContent = texto;
+  $('chat').appendChild(div);
+  $('chat').scrollTop = $('chat').scrollHeight;
+}
+
+$('formMsg').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const texto = $('texto').value.trim();
+  if (!texto) return;
+  $('texto').value = '';
+  bolha(texto, 'voce');
+  $('btnEnviar').disabled = true;
+  try {
+    const r = await api('/admin/teste/mensagem', { corpo: { telefone: $('telefone').value, texto } });
+    r.respostas.forEach((t) => bolha(t, 'bot'));
+    if (!r.respostas.length && r.status === 'humano') bolha('Conversa com a equipe (modo humano): o bot não responde. Clique em "Nova conversa" para recomeçar.', 'info');
+    else if (r.status === 'humano') bolha('↪ Transferido para a equipe', 'info');
+  } catch (err) { bolha(err.message, 'erro'); }
+  $('btnEnviar').disabled = false;
+  $('texto').focus();
+});
+
+$('btnReset').addEventListener('click', async () => {
+  try {
+    await api('/admin/teste/reset', { corpo: { telefone: $('telefone').value } });
+    $('chat').innerHTML = '';
+    bolha('Conversa apagada. Pode começar de novo.', 'info');
+  } catch (err) { bolha(err.message, 'erro'); }
+});
+
+const nomesEstado = { open: 'conectado', connecting: 'aguardando QR', close: 'desconectado', inexistente: 'não criado' };
+function mostrarEstado(e) {
+  $('estado').textContent = nomesEstado[e] || e || '—';
+  $('estado').className = 'estado ' + (e || '');
+  if (e === 'open') $('qr').innerHTML = '';
+}
+
+let poll;
+async function atualizarStatus() {
+  try {
+    const r = await api('/admin/whatsapp/status', { metodo: 'GET' });
+    if (!r.configurado) { $('estado').textContent = 'não configurado no servidor'; return; }
+    mostrarEstado(r.estado);
+    if (r.estado === 'open') clearInterval(poll);
+  } catch (err) { $('estado').textContent = err.message; }
+}
+
+$('btnStatus').addEventListener('click', atualizarStatus);
+$('btnConectar').addEventListener('click', async () => {
+  $('btnConectar').disabled = true;
+  try {
+    const r = await api('/admin/whatsapp/conectar');
+    mostrarEstado(r.estado);
+    $('qr').innerHTML = r.qr ? '<img alt="QR code do WhatsApp" src="' + r.qr + '">' : '';
+    if (r.pareamento) $('qr').insertAdjacentHTML('beforeend', '<p class="dica">Ou use o código de pareamento: <b>' + r.pareamento + '</b></p>');
+    clearInterval(poll);
+    if (r.estado !== 'open') poll = setInterval(atualizarStatus, 4000);
+  } catch (err) { $('estado').textContent = err.message; }
+  $('btnConectar').disabled = false;
+});
+$('btnDesconectar').addEventListener('click', async () => {
+  if (!confirm('Desconectar o WhatsApp do bot?')) return;
+  try { await api('/admin/whatsapp/desconectar'); atualizarStatus(); } catch (err) { $('estado').textContent = err.message; }
+});
+
+$('btnExemplo').addEventListener('click', () => {
+  $('csv').value = 'nome;cnpj;regime;responsavel;email;telefone;contato\n' +
+    'Padaria Bom Pão LTDA;12.345.678/0001-90;Simples Nacional;Ana;financeiro@bompao.com.br;(21) 99999-0001;Carlos\n' +
+    'João Silva Serviços;98.765.432/0001-10;MEI;Bruno;joao@email.com;21988880003;João';
+});
+$('btnImportar').addEventListener('click', async () => {
+  try {
+    const r = await api('/admin/clientes/importar', { corpo: $('csv').value, tipo: 'text/csv' });
+    $('resImport').textContent = r.empresas + ' empresa(s) nova(s), ' + r.telefones + ' telefone(s) vinculados.';
+  } catch (err) { $('resImport').textContent = err.message; }
+});
+
+if ($('token').value) atualizarStatus();
+</script>
+</body>
+</html>
