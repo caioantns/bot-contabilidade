@@ -169,3 +169,19 @@ test('horário aceita minutos e dia inteiro', async () => {
   assert.equal(dentroDoHorario(new Date('2026-11-10T20:59:00Z'), comercial), true);  // terça 17:59
   assert.equal(dentroDoHorario(new Date('2026-11-10T21:00:00Z'), comercial), false); // terça 18:00
 });
+
+test('comandos de retorno ao bot', async () => {
+  const { comandoFim, pediuMenu, expirou } = await import('../src/retorno.js');
+  assert.equal(comandoFim('fim 12'), 12);
+  assert.equal(comandoFim('Fim #7'), 7);
+  assert.equal(comandoFim('finalizar 3.'), 3);
+  assert.equal(comandoFim('fim'), null);
+  assert.equal(comandoFim('o fim do mês 12'), null);
+  assert.equal(pediuMenu('Menu'), true);
+  assert.equal(pediuMenu('voltar'), true);
+  assert.equal(pediuMenu('quero ver o menu de serviços'), false);
+  const agora = Date.parse('2026-11-12T12:00:00Z');
+  assert.equal(expirou({ criado_em: '2026-11-12T11:00:00Z' }, agora), false); // 1h (padrão 12h)
+  assert.equal(expirou({ criado_em: '2026-11-11T20:00:00Z' }, agora), true);  // 16h
+  assert.equal(expirou(null, agora), true);
+});

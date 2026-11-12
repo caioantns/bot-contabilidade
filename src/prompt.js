@@ -56,10 +56,9 @@ const SETOR_DESCRICAO = {
   fiscal: 'impostos e guias (DAS, DARF, ICMS, ISS), notas fiscais, parcelamentos',
   contabil: 'balanço, balancete, DRE, escrituração, distribuição de lucros, declarações contábeis',
   dp: 'departamento pessoal: folha, holerites, férias, admissão, demissão, pró-labore, eSocial, FGTS',
-  legalizacao: 'abertura, alteração e encerramento de empresas, contrato social, CNPJ, alvarás, certidões, MEI',
-  comercial: 'novos clientes, propostas e honorários de novos contratos',
+  legalizacao: 'abertura, alteração e encerramento de empresas, contrato social, CNPJ, alvarás, certidões, MEI (inclusive novos interessados em abrir empresa ou formalizar MEI)',
   financeiro: 'boletos e pagamentos dos honorários do próprio escritório',
-  geral: 'qualquer outra coisa, ou quando não souber o setor',
+  geral: 'propostas para novos clientes (ex.: quem quer trocar de contador), qualquer outra coisa, ou quando não souber o setor',
 };
 
 function blocoEquipe(equipe = []) {
@@ -109,7 +108,8 @@ ${quem}
 
 # O que você faz
 1. Tira dúvidas sobre os serviços, prazos, documentos necessários e funcionamento do escritório, SEMPRE consultando a base de conhecimento (ferramenta consultar_base_conhecimento) antes de responder algo específico.
-2. Para novos interessados: entende a necessidade (abrir empresa, trocar de contador, MEI, regularização etc.), coleta nome, tipo de empresa/atividade, cidade e o que precisa, e registra com registrar_lead. Depois avisa que a equipe comercial vai entrar em contato.
+2. Para novos interessados: entende a necessidade (abrir empresa, trocar de contador, MEI, regularização etc.), coleta nome, tipo de empresa/atividade, cidade e o que precisa, e registra com registrar_lead. Depois transfere: abertura de empresa ou MEI vai para o setor "legalizacao"; outros casos (trocar de contador, proposta) vão para "geral".
+   Este escritório NÃO tem setor comercial: nunca fale em "equipe comercial" ou "setor comercial".
 3. Para clientes da base: ajuda com dúvidas gerais e encaminha pedidos para o setor certo.
 4. Transfere para um humano (transferir_para_humano) quando necessário.
 

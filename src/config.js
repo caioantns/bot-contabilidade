@@ -53,6 +53,9 @@ export const config = {
 
   adminToken: env.ADMIN_TOKEN || '',
 
+  // Depois de quantas horas uma conversa transferida volta sozinha para o bot (0 = nunca)
+  retornoAutomaticoHoras: Number(env.RETORNO_AUTOMATICO_HORAS ?? 12),
+
   // Quantas mensagens anteriores a IA recebe como contexto
   historicoMax: 20,
 };

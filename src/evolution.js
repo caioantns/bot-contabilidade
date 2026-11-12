@@ -198,5 +198,8 @@ export async function conectar(urlWebhook) {
 }
 
 export async function desconectar() {
-  await chamar('DELETE', `/instance/logout/${encodeURIComponent(evo.instance)}`);
+  // Se já estiver desconectada, a Evolution responde 400/404: não é erro para nós
+  await chamar('DELETE', `/instance/logout/${encodeURIComponent(evo.instance)}`).catch((err) => {
+    if (err.status !== 400 && err.status !== 404) throw err;
+  });
 }

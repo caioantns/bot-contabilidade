@@ -90,7 +90,7 @@ export const executores = {
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [conversa.id, conversa.telefone, input.nome, input.tipo_empresa, input.necessidade, input.cidade, input.observacoes]
     );
-    return 'Lead registrado. A equipe comercial vai entrar em contato.';
+    return 'Lead registrado. Agora transfira para o setor certo (legalizacao para abrir empresa/MEI; geral para os demais).';
   },
 
   async transferir_para_humano({ setor, motivo, funcionario: nomePedido }, { conversa, cliente, enviar }) {
@@ -114,7 +114,10 @@ export const executores = {
     let avisada = false;
     if (escolhida?.telefone && enviar) {
       try {
-        await enviar(escolhida.telefone, textoAviso({ funcionario: escolhida, setor: setorFinal, motivo, conversa, cliente }));
+        await enviar(
+          escolhida.telefone,
+          textoAviso({ funcionario: escolhida, setor: setorFinal, motivo, conversa, cliente, transferenciaId: rows[0].id })
+        );
         await query('UPDATE transferencias SET aviso_enviado = TRUE WHERE id = $1', [rows[0].id]);
         avisada = true;
       } catch (err) {

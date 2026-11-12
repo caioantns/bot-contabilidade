@@ -7,7 +7,6 @@ export const SETORES = {
   contabil: 'Contábil',
   dp: 'Departamento Pessoal',
   legalizacao: 'Legalização',
-  comercial: 'Comercial',
   financeiro: 'Financeiro',
   geral: 'Atendimento',
 };
@@ -78,7 +77,7 @@ export async function atualizarFuncionario(id, { telefone, ativo }) {
 }
 
 // Texto do aviso que a funcionária recebe no WhatsApp dela
-export function textoAviso({ funcionario, setor, motivo, conversa, cliente }) {
+export function textoAviso({ funcionario, setor, motivo, conversa, cliente, transferenciaId }) {
   const quem = cliente
     ? `${cliente.contato || conversa.nome_perfil || 'Cliente'} — ${cliente.nome}`
     : `${conversa.nome_perfil || 'Novo contato'} (ainda não é cliente)`;
@@ -91,5 +90,6 @@ export function textoAviso({ funcionario, setor, motivo, conversa, cliente }) {
     `*Pedido:* ${motivo}`,
     '',
     'O bot já avisou que você vai continuar o atendimento.',
+    ...(transferenciaId ? ['', `Quando terminar, responda aqui: *fim ${transferenciaId}*`, '(o cliente volta a ser atendido pelo bot)'] : []),
   ].join('\n');
 }

@@ -3,6 +3,18 @@ import { config } from './config.js';
 import { obterConversa, registrarMensagem, historico } from './conversas.js';
 import { responder } from './agente.js';
 import { mascararTelefone } from './telefone.js';
+import {
+  comandoFim,
+  pediuMenu,
+  funcionarioPorTelefone,
+  finalizarPorComando,
+  transferenciaAberta,
+  expirou,
+  devolverAoBot,
+  deveAvisarEspera,
+  marcarEsperaAvisada,
+  textoEspera,
+} from './retorno.js';
 
 const TIPOS_SUPORTADOS = new Set(['text', 'button', 'interactive']);
 
@@ -23,17 +35,40 @@ export function enfileirar(chave, tarefa) {
  * @param enviar  async (waId, texto) => void   (WhatsApp em produção, console no chat de teste)
  */
 export async function processarMensagem(msg, enviar) {
-  const { conversa, cliente } = await obterConversa(msg);
   const tag = `[${mascararTelefone(msg.waId)}]`;
+
+  // Funcionária encerrando um atendimento: "fim 12"
+  const idFim = comandoFim(msg.texto);
+  if (idFim) {
+    const funcionaria = await funcionarioPorTelefone(msg.waId);
+    if (funcionaria) {
+      await enviar(msg.waId, await finalizarPorComando(idFim, funcionaria, enviar));
+      return;
+    }
+  }
+
+  const { conversa, cliente } = await obterConversa(msg);
 
   const conteudo = msg.texto || `[${msg.tipo} sem texto]`;
   const nova = await registrarMensagem(conversa.id, 'cliente', conteudo, msg.id);
   if (!nova) return; // duplicada
 
-  // Equipe assumiu: o bot fica quieto até alguém devolver a conversa
+  // Conversa está com a equipe
   if (conversa.status === 'humano') {
-    console.log(`${tag} conversa com humano, bot não responde`);
-    return;
+    const transferencia = await transferenciaAberta(conversa.id);
+    if (pediuMenu(msg.texto) || expirou(transferencia)) {
+      await devolverAoBot(conversa.id);
+      console.log(`${tag} conversa voltou para o bot (${pediuMenu(msg.texto) ? 'cliente pediu menu' : 'tempo esgotado'})`);
+    } else {
+      if (await deveAvisarEspera(conversa)) {
+        const espera = textoEspera(transferencia);
+        await registrarMensagem(conversa.id, 'bot', espera);
+        await enviar(msg.waId, espera);
+        await marcarEsperaAvisada(conversa.id);
+      }
+      console.log(`${tag} conversa com a equipe, bot aguardando`);
+      return;
+    }
   }
 
   if (!TIPOS_SUPORTADOS.has(msg.tipo) && !msg.texto) {
