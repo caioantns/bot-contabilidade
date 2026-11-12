@@ -7,6 +7,9 @@ export const pool = new pg.Pool({
   max: 10,
 });
 
+// Sem isso, uma conexão ociosa derrubada pelo banco (restart, rede) derruba o processo inteiro
+pool.on('error', (err) => console.error('[db] conexão perdida:', err.message));
+
 export const query = (text, params) => pool.query(text, params);
 
 // Descobre uma vez se o pgvector está disponível (coluna embedding existe)

@@ -137,27 +137,35 @@ const configWebhook = (url) => ({
   events: ['MESSAGES_UPSERT'],
 });
 
-// Garante que a instância existe e aponta o webhook para o bot. Devolve o estado e, se preciso, o QR code.
-export async function conectar(urlWebhook) {
-  let estado = await estadoConexao();
+const ignorar404 = (err) => {
+  if (err.status !== 404) throw err;
+};
 
-  if (estado === 'inexistente') {
-    const criada = await chamar('POST', '/instance/create', {
-      instanceName: evo.instance,
-      integration: 'WHATSAPP-BAILEYS',
-      qrcode: true,
-      webhook: configWebhook(urlWebhook),
-    });
-    return { estado: 'connecting', qr: criada?.qrcode?.base64 ?? null, pareamento: criada?.qrcode?.pairingCode ?? null };
+// Conecta o WhatsApp. Se já estiver conectado, só garante o webhook.
+// Se não estiver, APAGA a instância e cria outra do zero: na Evolution v2.3.7, chamar /instance/connect
+// com uma tentativa já aberta cria um segundo socket que corrompe o pareamento
+// ("Não foi possível conectar o dispositivo" no celular).
+export async function conectar(urlWebhook) {
+  const estado = await estadoConexao();
+
+  if (estado === 'open') {
+    await chamar('POST', `/webhook/set/${encodeURIComponent(evo.instance)}`, { webhook: configWebhook(urlWebhook) });
+    return { estado, qr: null };
   }
 
-  await chamar('POST', `/webhook/set/${encodeURIComponent(evo.instance)}`, { webhook: configWebhook(urlWebhook) });
+  if (estado !== 'inexistente') {
+    await chamar('DELETE', `/instance/logout/${encodeURIComponent(evo.instance)}`).catch(() => {});
+    await chamar('DELETE', `/instance/delete/${encodeURIComponent(evo.instance)}`).catch(ignorar404);
+    await new Promise((r) => setTimeout(r, 1500)); // dá tempo da Evolution fechar o socket antigo
+  }
 
-  if (estado === 'open') return { estado, qr: null };
-
-  const c = await chamar('GET', `/instance/connect/${encodeURIComponent(evo.instance)}`);
-  estado = await estadoConexao();
-  return { estado, qr: c?.base64 ?? null, pareamento: c?.pairingCode ?? null };
+  const criada = await chamar('POST', '/instance/create', {
+    instanceName: evo.instance,
+    integration: 'WHATSAPP-BAILEYS',
+    qrcode: true,
+    webhook: configWebhook(urlWebhook),
+  });
+  return { estado: 'connecting', qr: criada?.qrcode?.base64 ?? null, pareamento: criada?.qrcode?.pairingCode ?? null };
 }
 
 export async function desconectar() {
