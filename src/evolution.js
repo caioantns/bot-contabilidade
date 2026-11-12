@@ -64,6 +64,20 @@ function escolherJid(key = {}, data = {}) {
   return candidatos.find((j) => j.endsWith('@s.whatsapp.net')) ?? key.remoteJid ?? null;
 }
 
+// Na v2.3.7, responder pelo número (PN) a um contato que usa LID deixa a mensagem pendente e
+// pode derrubar a sessão. Contorno relatado pela comunidade: responder pelo JID @lid do contato.
+// https://github.com/evolution-foundation/evolution-api/issues/2626
+const destinoPorWaId = new Map();
+
+function acharLid(key = {}, data = {}) {
+  const candidatos = [key.remoteJid, key.remoteJidAlt, key.senderLid, data.senderLid, key.participant, key.participantAlt];
+  return candidatos.find((j) => typeof j === 'string' && j.endsWith('@lid')) ?? null;
+}
+
+export function destinoDeEnvio(waId) {
+  return destinoPorWaId.get(String(waId)) ?? String(waId);
+}
+
 export function extrairMensagensEvolution(body, agora = Date.now()) {
   const evento = String(body?.event || '').toLowerCase().replace(/_/g, '.');
   if (evento !== 'messages.upsert') return [];
@@ -83,10 +97,18 @@ export function extrairMensagensEvolution(body, agora = Date.now()) {
     const jid = escolherJid(key, data);
     if (!jid) continue;
 
+    const waId = jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0] : jid;
+    const lid = acharLid(key, data);
+    if (lid) destinoPorWaId.set(waId, lid);
+    else if (key.addressingMode === 'lid') {
+      // Diagnóstico: mostra só os NOMES dos campos, sem conteúdo
+      console.warn(`[evolution] contato em modo LID sem JID @lid no payload. Campos da key: ${Object.keys(key).join(', ')}`);
+    }
+
     saida.push({
       id: key.id,
       // Telefone em dígitos quando disponível; se só houver LID, guardamos o JID completo para responder
-      waId: jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0] : jid,
+      waId,
       remoteJid,
       nomePerfil: data.pushName ?? null,
       tipo: tipoDaMensagem(data.message),
@@ -99,22 +121,22 @@ export function extrairMensagensEvolution(body, agora = Date.now()) {
 
 // ---------- Envio ----------
 
+// Envio mínimo: sem "digitando..." e sem confirmação de leitura, que são chamadas extras
+// ao WhatsApp e coincidiam com as quedas de sessão na v2.3.7.
 export async function enviarTexto(waId, texto) {
-  await chamar('POST', `/message/sendText/${encodeURIComponent(evo.instance)}`, {
-    number: waId,
-    text: texto,
-    delay: 1200, // mostra "digitando..." por um instante
-  });
+  const destino = destinoDeEnvio(waId);
+  try {
+    await chamar('POST', `/message/sendText/${encodeURIComponent(evo.instance)}`, { number: destino, text: texto });
+  } catch (err) {
+    // Se o envio pelo LID falhar, tenta pelo número
+    if (destino === String(waId)) throw err;
+    console.warn(`[evolution] envio pelo LID falhou (${err.message}); tentando pelo número`);
+    await chamar('POST', `/message/sendText/${encodeURIComponent(evo.instance)}`, { number: String(waId), text: texto });
+  }
 }
 
-export async function marcarComoLida(msg) {
-  try {
-    await chamar('POST', `/chat/markMessageAsRead/${encodeURIComponent(evo.instance)}`, {
-      readMessages: [{ remoteJid: msg.remoteJid, fromMe: false, id: msg.id }],
-    });
-  } catch {
-    /* não é crítico */
-  }
+export async function marcarComoLida() {
+  /* desativado de propósito (ver comentário acima) */
 }
 
 // ---------- Conexão (QR code) ----------
@@ -163,6 +185,13 @@ export async function conectar(urlWebhook) {
     instanceName: evo.instance,
     integration: 'WHATSAPP-BAILEYS',
     qrcode: true,
+    // Comportamento mais "quieto" possível: menos tráfego com o WhatsApp, menos chance de queda
+    groupsIgnore: true,
+    alwaysOnline: false,
+    readMessages: false,
+    readStatus: false,
+    syncFullHistory: false,
+    rejectCall: false,
     webhook: configWebhook(urlWebhook),
   });
   return { estado: 'connecting', qr: criada?.qrcode?.base64 ?? null, pareamento: criada?.qrcode?.pairingCode ?? null };

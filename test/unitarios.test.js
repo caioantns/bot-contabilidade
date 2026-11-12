@@ -115,3 +115,14 @@ test('responde números brasileiros da Meta com o 9', async () => {
   assert.equal(destinatario('5521999998888'), '5521999998888');
   assert.equal(destinatario('14155550123'), '14155550123');
 });
+
+test('Evolution responde pelo LID quando ele vem no payload', async () => {
+  const { extrairMensagensEvolution, destinoDeEnvio } = await import('../src/evolution.js');
+  const agora = 1_700_000_000_000;
+  const [m] = extrairMensagensEvolution({ event: 'messages.upsert', data: {
+    key: { remoteJid: '72679503695959@lid', remoteJidAlt: '5522998568084@s.whatsapp.net', fromMe: false, id: 'L1', addressingMode: 'lid' },
+    message: { conversation: 'oi' }, messageTimestamp: agora / 1000 } }, agora);
+  assert.equal(m.waId, '5522998568084');
+  assert.equal(destinoDeEnvio('5522998568084'), '72679503695959@lid');
+  assert.equal(destinoDeEnvio('5521000000000'), '5521000000000');
+});
